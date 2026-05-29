@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 from datetime import timedelta
 import logging
+import re
 
 from aiohttp.client_exceptions import ClientError
 import async_timeout
@@ -22,6 +23,36 @@ from sagemcom_api.exceptions import (
 from sagemcom_api.models import Device
 
 
+DEVICE_FILTER_FIELDS = (
+    "id",
+    "name",
+    "user_friendly_name",
+    "phys_address",
+    "ip_address",
+    "interface_type",
+    "user_host_name",
+    "host_name",
+)
+
+
+def compile_regex_rules(rules: str | None) -> list[re.Pattern]:
+    """Compile newline-separated regex rules."""
+    return [
+        re.compile(rule.strip())
+        for rule in (rules or "").splitlines()
+        if rule.strip()
+    ]
+
+
+def device_filter_text(device: Device) -> str:
+    """Return searchable text for a device."""
+    values = []
+    for field in DEVICE_FILTER_FIELDS:
+        if value := getattr(device, field, None):
+            values.append(str(value))
+    return "\n".join(values)
+
+
 class SagemcomDataUpdateCoordinator(DataUpdateCoordinator):
     """Class to manage fetching Sagemcom data."""
 
@@ -33,6 +64,8 @@ class SagemcomDataUpdateCoordinator(DataUpdateCoordinator):
         name: str,
         client: SagemcomClient,
         update_interval: timedelta | None = None,
+        include_regex: str | None = None,
+        exclude_regex: str | None = None,
     ):
         """Initialize update coordinator."""
         super().__init__(
@@ -45,6 +78,19 @@ class SagemcomDataUpdateCoordinator(DataUpdateCoordinator):
         self.hosts: dict[str, Device] = {}
         self.client = client
         self.logger = logger
+        self._include_rules = compile_regex_rules(include_regex)
+        self._exclude_rules = compile_regex_rules(exclude_regex)
+
+    def device_allowed(self, device: Device) -> bool:
+        """Return whether a device is allowed by the configured filters."""
+        device_text = device_filter_text(device)
+
+        if self._include_rules and not any(
+            rule.search(device_text) for rule in self._include_rules
+        ):
+            return False
+
+        return not any(rule.search(device_text) for rule in self._exclude_rules)
 
     async def _async_update_data(self) -> dict[str, Device]:
         """Update hosts data."""
@@ -62,6 +108,10 @@ class SagemcomDataUpdateCoordinator(DataUpdateCoordinator):
                     host.active = False
                     self.hosts[idx] = host
                 for host in hosts:
+                    if not self.device_allowed(host):
+                        self.hosts.pop(host.id, None)
+                        continue
+
                     self.hosts[host.id] = host
 
                 return self.hosts

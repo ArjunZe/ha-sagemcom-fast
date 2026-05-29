@@ -11,7 +11,8 @@
       "login_timeout": "Request timed-out. This could be caused by using the wrong encryption method, or using a (non) SSL connection.",
       "maximum_session_count": "Maximum session count reached.",
       "login_retry_error": "Too many login attempts. Retry later.",
-      "unsupported_host": "Your host does not support the Sagemcom API endpoint used by this integration. Make sure you have provided the correct host and that your router is supported."
+      "unsupported_host": "Your host does not support the Sagemcom API endpoint used by this integration. Make sure you have provided the correct host and that your router is supported.",
+      "invalid_regex": "One or more filter rules are not valid regular expressions."
     },
     "step": {
       "user": {
@@ -20,18 +21,33 @@
           "password": "Password",
           "username": "Username",
           "ssl": "Uses an SSL certificate",
-          "verify_ssl": "Verify SSL certificate"
+          "verify_ssl": "Verify SSL certificate",
+          "device_include_regex": "Include device regex rules",
+          "device_exclude_regex": "Exclude device regex rules"
+        },
+        "data_description": {
+          "device_include_regex": "Optional. Add one regex per line. When set, devices must match at least one include rule before Home Assistant device tracker entities are created.",
+          "device_exclude_regex": "Optional. Add one regex per line. Exclude rules are applied after include rules and prevent matching devices from being created."
         },
         "description": "Enter your credentials for accessing the router's web interface. The first login may take longer (up to a minute) as we retrieve the encryption method used by your router. For more information, see the [supported devices]({supported_devices_url})."
       }
     }
   },
   "options": {
+    "error": {
+      "invalid_regex": "One or more filter rules are not valid regular expressions."
+    },
     "step": {
       "init": {
         "title": "Options",
         "data": {
-          "scan_interval": "Scan Interval (seconds)"
+          "scan_interval": "Scan Interval (seconds)",
+          "device_include_regex": "Include device regex rules",
+          "device_exclude_regex": "Exclude device regex rules"
+        },
+        "data_description": {
+          "device_include_regex": "Optional. Add one regex per line. When set, devices must match at least one include rule before Home Assistant device tracker entities are created.",
+          "device_exclude_regex": "Optional. Add one regex per line. Exclude rules are applied after include rules and prevent matching devices from being created."
         }
       }
     }

@@ -11,6 +11,7 @@ from homeassistant.const import (
 )
 from homeassistant.core import callback
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
+import homeassistant.helpers.selector as selector
 from sagemcom_api.client import SagemcomClient
 from sagemcom_api.exceptions import (
     AccessRestrictionException,
@@ -22,8 +23,14 @@ from sagemcom_api.exceptions import (
 )
 import voluptuous as vol
 
-from .const import CONF_ENCRYPTION_METHOD, DOMAIN, LOGGER
-from .options_flow import OptionsFlow
+from .const import (
+    CONF_DEVICE_EXCLUDE_REGEX,
+    CONF_DEVICE_INCLUDE_REGEX,
+    CONF_ENCRYPTION_METHOD,
+    DOMAIN,
+    LOGGER,
+)
+from .options_flow import OptionsFlow, validate_regex_rules
 
 
 class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
@@ -34,6 +41,8 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
     _host: str | None = None
     _username: str | None = None
+    _device_include_regex: str = ""
+    _device_exclude_regex: str = ""
 
     async def async_validate_input(self, user_input):
         """Validate user credentials."""
@@ -70,6 +79,15 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         errors = {}
 
         if user_input:
+            self._host = user_input.get(CONF_HOST)
+            self._username = user_input.get(CONF_USERNAME) or ""
+            self._device_include_regex = user_input.get(CONF_DEVICE_INCLUDE_REGEX, "")
+            self._device_exclude_regex = user_input.get(CONF_DEVICE_EXCLUDE_REGEX, "")
+
+            errors.update(self._validate_filter_options(user_input))
+            if errors:
+                return self._show_user_form(errors)
+
             # TODO change to gateway mac address or something more unique
             await self.async_set_unique_id(user_input.get(CONF_HOST))
             self._abort_if_unique_id_configured()
@@ -94,6 +112,10 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 errors["base"] = "unknown"
                 LOGGER.exception(exception)
 
+        return self._show_user_form(errors)
+
+    def _show_user_form(self, errors):
+        """Show the initial setup form."""
         return self.async_show_form(
             step_id="user",
             data_schema=vol.Schema(
@@ -103,6 +125,18 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     vol.Optional(CONF_PASSWORD): str,
                     vol.Required(CONF_SSL, default=False): bool,
                     vol.Required(CONF_VERIFY_SSL, default=False): bool,
+                    vol.Optional(
+                        CONF_DEVICE_INCLUDE_REGEX,
+                        default=self._device_include_regex,
+                    ): selector.TextSelector(
+                        selector.TextSelectorConfig(multiline=True)
+                    ),
+                    vol.Optional(
+                        CONF_DEVICE_EXCLUDE_REGEX,
+                        default=self._device_exclude_regex,
+                    ): selector.TextSelector(
+                        selector.TextSelectorConfig(multiline=True)
+                    ),
                 }
             ),
             description_placeholders={
@@ -110,6 +144,16 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             },
             errors=errors,
         )
+
+    def _validate_filter_options(self, user_input):
+        """Validate device filter options."""
+        errors = {}
+        for option in (CONF_DEVICE_INCLUDE_REGEX, CONF_DEVICE_EXCLUDE_REGEX):
+            try:
+                validate_regex_rules(user_input.get(option, ""))
+            except ValueError:
+                errors[option] = "invalid_regex"
+        return errors
 
     @staticmethod
     @callback

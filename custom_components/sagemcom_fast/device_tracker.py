@@ -18,6 +18,17 @@ from .const import DOMAIN
 from .coordinator import SagemcomDataUpdateCoordinator
 
 
+def device_display_name(device: Device) -> str:
+    """Return the best display name for a device."""
+    return (
+        device.user_friendly_name
+        or device.user_host_name
+        or device.host_name
+        or device.name
+        or device.phys_address
+    )
+
+
 async def async_setup_entry(
     hass: HomeAssistant,
     entry: ConfigEntry,
@@ -64,11 +75,7 @@ class SagemcomScannerEntity(
     @property
     def name(self) -> str:
         """Return the name of the device."""
-        return (
-            self.device.name
-            or self.device.user_friendly_name
-            or self.device.phys_address
-        )
+        return device_display_name(self.device)
 
     @property
     def unique_id(self) -> str:
@@ -98,7 +105,15 @@ class SagemcomScannerEntity(
     @property
     def extra_state_attributes(self) -> dict[str, StateType]:
         """Return the state attributes of the device."""
-        return {"interface_type": self.device.interface_type}
+        return {
+            "interface_type": self.device.interface_type,
+            "router_name": self.device.name,
+            "friendly_name": self.device.user_friendly_name,
+            "user_hostname": self.device.user_host_name,
+            "hostname": self.device.host_name,
+            "ip_address": self.device.ip_address,
+            "mac_address": self.device.phys_address,
+        }
 
     @property
     def ip_address(self) -> str:
@@ -113,4 +128,4 @@ class SagemcomScannerEntity(
     @property
     def hostname(self) -> str:
         """Return hostname of the device."""
-        return self.device.user_host_name or self.device.host_name
+        return self.device.user_host_name or self.device.host_name or self.name
