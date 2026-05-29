@@ -17,7 +17,7 @@ from homeassistant.const import (
 )
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryAuthFailed, ConfigEntryNotReady
-from homeassistant.helpers import aiohttp_client, device_registry
+from homeassistant.helpers import aiohttp_client, device_registry, entity_registry
 from homeassistant.helpers.device_registry import CONNECTION_NETWORK_MAC
 from sagemcom_api.client import SagemcomClient
 from sagemcom_api.enums import EncryptionMethod
@@ -31,6 +31,8 @@ from sagemcom_api.exceptions import (
 from sagemcom_api.models import DeviceInfo as GatewayDeviceInfo
 
 from .const import (
+    CONF_DEVICE_EXCLUDE_REGEX,
+    CONF_DEVICE_INCLUDE_REGEX,
     CONF_ENCRYPTION_METHOD,
     DEFAULT_SCAN_INTERVAL,
     DOMAIN,
@@ -95,7 +97,15 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
     finally:
         await client.logout()
 
-    update_interval = entry.options.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL)
+    update_interval = entry.options.get(
+        CONF_SCAN_INTERVAL, entry.data.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL)
+    )
+    include_regex = entry.options.get(
+        CONF_DEVICE_INCLUDE_REGEX, entry.data.get(CONF_DEVICE_INCLUDE_REGEX)
+    )
+    exclude_regex = entry.options.get(
+        CONF_DEVICE_EXCLUDE_REGEX, entry.data.get(CONF_DEVICE_EXCLUDE_REGEX)
+    )
 
     coordinator = SagemcomDataUpdateCoordinator(
         hass,
@@ -103,6 +113,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
         name="sagemcom_hosts",
         client=client,
         update_interval=timedelta(seconds=update_interval),
+        include_regex=include_regex,
+        exclude_regex=exclude_regex,
     )
 
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = HomeAssistantSagemcomFastData(
@@ -124,6 +136,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
     )
 
     await coordinator.async_config_entry_first_refresh()
+    if include_regex or exclude_regex:
+        _cleanup_filtered_device_entries(
+            hass,
+            entry,
+            allowed_device_ids=set(coordinator.data),
+            gateway_id=gateway.serial_number,
+        )
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     entry.async_on_unload(entry.add_update_listener(update_listener))
@@ -141,10 +160,41 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
 async def update_listener(hass: HomeAssistant, entry: ConfigEntry) -> None:
     """Update when entry options update."""
-    if entry.options[CONF_SCAN_INTERVAL]:
-        data: HomeAssistantSagemcomFastData = hass.data[DOMAIN][entry.entry_id]
-        data.coordinator.update_interval = timedelta(
-            seconds=entry.options[CONF_SCAN_INTERVAL]
-        )
+    await hass.config_entries.async_reload(entry.entry_id)
 
-        await data.coordinator.async_refresh()
+
+def _cleanup_filtered_device_entries(
+    hass: HomeAssistant,
+    entry: ConfigEntry,
+    *,
+    allowed_device_ids: set[str],
+    gateway_id: str,
+) -> None:
+    """Remove registry entries for device trackers blocked by current filters."""
+    dev_registry = device_registry.async_get(hass)
+    blocked_registry_device_ids: set[str] = set()
+    for device_entry in device_registry.async_entries_for_config_entry(
+        dev_registry, entry.entry_id
+    ):
+        device_ids = {
+            identifier[1]
+            for identifier in device_entry.identifiers
+            if identifier[0] == DOMAIN
+        }
+        if not device_ids or gateway_id in device_ids:
+            continue
+
+        if not device_ids & allowed_device_ids:
+            blocked_registry_device_ids.add(device_entry.id)
+            dev_registry.async_remove_device(device_entry.id)
+
+    ent_registry = entity_registry.async_get(hass)
+    for entity_entry in entity_registry.async_entries_for_config_entry(
+        ent_registry, entry.entry_id
+    ):
+        if (
+            entity_entry.device_id in blocked_registry_device_ids
+            or entity_entry.domain == "device_tracker"
+            and entity_entry.unique_id not in allowed_device_ids
+        ):
+            ent_registry.async_remove(entity_entry.entity_id)

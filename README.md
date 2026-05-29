@@ -2,6 +2,13 @@
 [![GitHub release](https://img.shields.io/github/release/iMicknl/ha-sagemcom-fast.svg)](https://github.com/iMicknl/ha-sagemcom-fast/releases/)
 [![HA integration usage](https://img.shields.io/badge/dynamic/json?color=41BDF5&logo=home-assistant&label=integration%20usage&suffix=%20installs&cacheSeconds=15600&url=https://analytics.home-assistant.io/custom_integrations.json&query=$.sagemcom_fast.total)](https://analytics.home-assistant.io/custom_integrations.json)
 
+# Acknowledgements
+
+This project is a fork of the excellent 'ha-sagemcom-fast' created by [iMicknl](https://github.com/iMicknl/ha-sagemcom-fast/).
+
+Huge thanks to the original author for building and maintaining the foundation of this integration and for contributing it to the Home Assistant community. 
+This repository includes modifications and additional functionality tailored for my own use case of regex based Include/Exclude rules and added ip, host and friendly_name while preserving and respecting the original project structure and vision.
+
 # Sagemcom F@st integration for Home Assistant
 
 This integration adds support for Sagemcom F@st routers to Home Assistant. Currently only a basic device_tracker entity is supported, however this could be extended in the future with more sensors.
@@ -12,6 +19,7 @@ Sagemcom F@st routers are used by many providers worldwide, but many of them did
 
 - Device Tracker, to track connected devices to your router (WiFi and Ethernet)
 - Reboot button, to reboot your gateway from Home Assistant
+- Disabled-by-default diagnostic sensors for tracked device details, such as IP address, MAC address, interface type, hostname, and router-provided names
 
 ## Known limitations / issues
 
@@ -38,6 +46,15 @@ https://github.com/imicknl/ha-sagemcom-fast
 This integration can only be configured via the Config Flow. Go to `Configuration -> Integrations -> Add Integration` and choose Sagemcom F@st. The prompt will ask you for your credentials. Please note that some routers require authentication, where others can login with `guest` username and an empty password.
 
 The first login might take a longer time (up to a minute), since we will try to retrieve the encryption method used by your router.
+
+### Device filters
+
+Device tracker creation can be filtered from the integration options. Open the Sagemcom F@st integration options and add one regular expression per line:
+
+- Include device regex rules: when set, a discovered device must match at least one include rule.
+- Exclude device regex rules: matching devices are skipped. Exclude rules win over include rules.
+
+Rules are matched before Home Assistant creates device tracker entities. They are checked against the router device id, name, friendly name, MAC address, IP address, interface type, user hostname, and hostname.
 
 ## Supported devices
 
