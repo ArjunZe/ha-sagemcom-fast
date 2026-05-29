@@ -38,7 +38,7 @@ Copy the `custom_components/sagemcom_fast` to your `custom_components` folder. R
 Add this repository as a custom repository to HACS as described [here](https://hacs.xyz/docs/faq/custom_repositories), search for the `Sagemcom F@st` integration and choose install. Reboot Home Assistant and install the Sagemcom F@st integration via the integrations config flow.
 
 ```
-https://github.com/imicknl/ha-sagemcom-fast
+https://github.com/ArjunZe/ha-sagemcom-fast
 ```
 
 ## Usage
