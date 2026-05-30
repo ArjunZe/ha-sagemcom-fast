@@ -12,11 +12,10 @@ from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.device_registry import CONNECTION_NETWORK_MAC, DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
-from sagemcom_api.models import Device
 
 from . import HomeAssistantSagemcomFastData
 from .const import DOMAIN
-from .coordinator import SagemcomDataUpdateCoordinator
+from .coordinator import SagemcomDataUpdateCoordinator, SagemcomDevice
 from .device_tracker import device_display_name
 
 
@@ -26,7 +25,7 @@ class SagemcomDeviceSensorDescription:
 
     key: str
     name: str
-    value_fn: Callable[[Device], str | None]
+    value_fn: Callable[[SagemcomDevice], str | None]
 
 
 SENSOR_DESCRIPTIONS: tuple[SagemcomDeviceSensorDescription, ...] = (
@@ -111,7 +110,7 @@ class SagemcomDeviceSensor(
         self._attr_unique_id = f"{idx}_{description.key}"
 
     @property
-    def device(self) -> Device:
+    def device(self) -> SagemcomDevice:
         """Return the device backing this sensor."""
         return self.coordinator.data[self._idx]
 
@@ -129,9 +128,13 @@ class SagemcomDeviceSensor(
     @property
     def device_info(self) -> DeviceInfo:
         """Return device registry information for this sensor."""
-        return DeviceInfo(
+        device_info = DeviceInfo(
             identifiers={(DOMAIN, self._idx)},
-            connections={(CONNECTION_NETWORK_MAC, self.device.phys_address)},
             name=device_display_name(self.device),
             via_device=(DOMAIN, self._via_device),
         )
+        if self.device.phys_address:
+            device_info["connections"] = {
+                (CONNECTION_NETWORK_MAC, self.device.phys_address)
+            }
+        return device_info

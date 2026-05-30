@@ -11,14 +11,12 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.restore_state import RestoreEntity
 from homeassistant.helpers.typing import StateType
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
-from sagemcom_api.models import Device
-
 from . import HomeAssistantSagemcomFastData
 from .const import DOMAIN
-from .coordinator import SagemcomDataUpdateCoordinator
+from .coordinator import SagemcomDataUpdateCoordinator, SagemcomDevice
 
 
-def device_display_name(device: Device) -> str:
+def device_display_name(device: SagemcomDevice) -> str:
     """Return the best display name for a device."""
     return (
         device.user_friendly_name
@@ -26,6 +24,7 @@ def device_display_name(device: Device) -> str:
         or device.host_name
         or device.name
         or device.phys_address
+        or device.id
     )
 
 
@@ -68,7 +67,7 @@ class SagemcomScannerEntity(
         self._via_device = parent
 
     @property
-    def device(self) -> Device:
+    def device(self) -> SagemcomDevice:
         """Return the device entity."""
         return self.coordinator.data[self._idx]
 
@@ -95,12 +94,16 @@ class SagemcomScannerEntity(
     @property
     def device_info(self) -> DeviceInfo:
         """Return the device info."""
-        return DeviceInfo(
+        device_info = DeviceInfo(
             identifiers={(DOMAIN, self.unique_id)},
-            connections={(CONNECTION_NETWORK_MAC, self.device.phys_address)},
             name=self.name,
             via_device=(DOMAIN, self._via_device),
         )
+        if self.device.phys_address:
+            device_info["connections"] = {
+                (CONNECTION_NETWORK_MAC, self.device.phys_address)
+            }
+        return device_info
 
     @property
     def extra_state_attributes(self) -> dict[str, StateType]:
@@ -116,14 +119,14 @@ class SagemcomScannerEntity(
         }
 
     @property
-    def ip_address(self) -> str:
+    def ip_address(self) -> str | None:
         """Return the primary ip address of the device."""
         return self.device.ip_address or None
 
     @property
-    def mac_address(self) -> str:
+    def mac_address(self) -> str | None:
         """Return the mac address of the device."""
-        return self.device.phys_address
+        return self.device.phys_address or None
 
     @property
     def hostname(self) -> str:

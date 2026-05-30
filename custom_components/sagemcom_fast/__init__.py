@@ -39,7 +39,7 @@ from .const import (
     LOGGER,
     PLATFORMS,
 )
-from .coordinator import SagemcomDataUpdateCoordinator
+from .coordinator import RestoredDevice, SagemcomDataUpdateCoordinator
 
 
 @dataclass
@@ -116,6 +116,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
         include_regex=include_regex,
         exclude_regex=exclude_regex,
     )
+    coordinator.restore_hosts(_restore_registered_hosts(hass, entry))
 
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = HomeAssistantSagemcomFastData(
         coordinator=coordinator, gateway=gateway
@@ -198,3 +199,54 @@ def _cleanup_filtered_device_entries(
             and entity_entry.unique_id not in allowed_device_ids
         ):
             ent_registry.async_remove(entity_entry.entity_id)
+
+
+def _restore_registered_hosts(
+    hass: HomeAssistant,
+    entry: ConfigEntry,
+) -> list[RestoredDevice]:
+    """Restore previously registered device trackers as offline hosts."""
+    ent_registry = entity_registry.async_get(hass)
+    dev_registry = device_registry.async_get(hass)
+    restored_hosts: list[RestoredDevice] = []
+
+    for entity_entry in entity_registry.async_entries_for_config_entry(
+        ent_registry, entry.entry_id
+    ):
+        if entity_entry.domain != "device_tracker":
+            continue
+
+        device_entry = None
+        if entity_entry.device_id:
+            device_entry = dev_registry.async_get(entity_entry.device_id)
+
+        mac_address = None
+        device_name = None
+        if device_entry is not None:
+            mac_address = next(
+                (
+                    connection[1]
+                    for connection in device_entry.connections
+                    if connection[0] == CONNECTION_NETWORK_MAC
+                ),
+                None,
+            )
+            device_name = getattr(device_entry, "name_by_user", None) or getattr(
+                device_entry, "name", None
+            )
+        entity_name = getattr(entity_entry, "original_name", None) or getattr(
+            entity_entry, "name", None
+        )
+
+        restored_hosts.append(
+            RestoredDevice(
+                id=entity_entry.unique_id,
+                name=entity_name,
+                user_friendly_name=device_name,
+                phys_address=mac_address,
+                user_host_name=device_name,
+                host_name=entity_name,
+            )
+        )
+
+    return restored_hosts
