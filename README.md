@@ -20,6 +20,7 @@ Sagemcom F@st routers are used by many providers worldwide, but many of them did
 - Device Tracker, to track connected devices to your router (WiFi and Ethernet)
 - Reboot button, to reboot your gateway from Home Assistant
 - Disabled-by-default diagnostic sensors for tracked device details, such as IP address, MAC address, interface type, hostname, and router-provided names
+- Previously tracked devices are restored as `not_home` when they are offline instead of becoming unavailable after a restart
 
 ## Known limitations / issues
 
